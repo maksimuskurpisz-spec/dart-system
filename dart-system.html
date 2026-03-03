@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dart Turniej PRO – Mobile</title>
+<style>
+:root{
+--bg:#0f172a; --card:#1e293b; --accent:#ef4444; --green:#22c55e; --text:#f1f5f9;
+}
+.light{--bg:#f1f5f9; --card:#ffffff; --text:#0f172a;}
+body{margin:0;font-family:system-ui;background:var(--bg);color:var(--text);}
+header{padding:15px 20px;display:flex;justify-content:space-between;align-items:center;background:var(--card);font-weight:bold;}
+.container{max-width:600px;margin:auto;padding:15px;}
+.card{background:var(--card);padding:15px;border-radius:16px;margin-bottom:15px;box-shadow:0 5px 15px rgba(0,0,0,.2);}
+button{width:100%;padding:15px;margin-top:10px;border:none;border-radius:12px;background:var(--accent);color:white;font-weight:bold;font-size:16px;cursor:pointer;}
+select,input{width:100%;padding:12px;margin:5px 0;border-radius:10px;border:none;font-size:16px;}
+#scoreboard{display:flex;gap:10px;flex-wrap:wrap;}
+.player{flex:1;min-width:120px;padding:12px;border-radius:12px;background:var(--card);text-align:center;}
+.active{border:3px solid var(--accent);}
+#keypad{display:grid;grid-template-columns:repeat(auto-fit,minmax(70px,1fr));gap:8px;margin-top:10px;}
+.key{padding:15px;border-radius:12px;background:var(--card);text-align:center;cursor:pointer;font-size:18px;touch-action: manipulation;}
+.multActive{background:var(--green);color:#000;}
+.bustOverlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);display:flex;justify-content:center;align-items:center;font-size:60px;color:red;z-index:999;}
+.hidden{display:none;}
+.savedGameItem{padding:12px;background:var(--card);border-radius:12px;margin:5px 0;cursor:pointer;font-size:16px;}
+@media (max-width:500px){
+button{padding:18px;font-size:18px;}
+.key{padding:18px;font-size:20px;}
+.player h2{font-size:24px;}
+.player h3{font-size:18px;}
+}
+</style>
+</head>
+<body>
+
+<header>
+🎯 Dart Mobile
+<button onclick="toggleTheme()">🌙</button>
+</header>
+
+<div class="container">
+
+<div id="setup" class="card">
+<h3>Nowy mecz</h3>
+<select id="mode"><option value="301">301</option><option value="501" selected>501</option></select>
+<label><input type="checkbox" id="doubleOut" checked> Double Out</label>
+<label>Ilość legów w secie:<select id="legsPerSet"><option>1</option><option selected>3</option><option>5</option></select></label>
+<label>Ilość setów w meczu:<select id="setsPerMatch"><option>1</option><option selected>3</option><option>5</option></select></label>
+<div id="players"></div>
+<button onclick="addPlayer()">Dodaj gracza</button>
+<button onclick="startGame()">Start meczu</button>
+</div>
+
+<div id="game" class="hidden">
+<h3 id="matchInfo"></h3>
+<div id="scoreboard"></div>
+<div id="keypad"></div>
+</div>
+
+<div id="endScreen" class="hidden card">
+<h2>Koniec meczu!</h2>
+<div id="finalStats"></div>
+<button onclick="saveStats()">Zapisz statystyki</button>
+<button onclick="backToMenu()">Powrót do menu</button>
+</div>
+
+</div>
+
+<script>
+let state={players:[],scores:{},startScore:501,current:0,doubleOut:true,turnStartScore:0,dartsInTurn:0,
+legsPerSet:3,setsPerMatch:3,legsWon:{},setsWon:{},currentLeg:1,currentSet:1,stats:{}};
+
+function addPlayer(name=""){
+if(document.querySelectorAll(".playerInput").length>=6)return;
+let i=document.createElement("input");
+i.className="playerInput"; i.placeholder="Imię gracza"; i.value=name; players.appendChild(i);
+}
+addPlayer("Gracz 1"); addPlayer("Gracz 2");
+
+function startGame(){
+let names=[]; document.querySelectorAll(".playerInput").forEach(i=>{if(i.value.trim())names.push(i.value.trim());});
+if(names.length<1)return alert("Dodaj graczy");
+state.players=names; state.startScore=parseInt(mode.value); state.doubleOut=doubleOut.checked;
+state.legsPerSet=parseInt(legsPerSet.value); state.setsPerMatch=parseInt(setsPerMatch.value);
+state.players.forEach(p=>{state.scores[p]=state.startScore; state.legsWon[p]=0; state.setsWon[p]=0; state.stats[p]={darts:0,totalPoints:0,doubleAttempts:0,doubleHits:0};});
+setup.classList.add("hidden"); game.classList.remove("hidden"); endScreen.classList.add("hidden"); createKeypad(); render();
+}
+
+function render(){
+matchInfo.innerHTML=`Set ${state.currentSet}/${state.setsPerMatch} | Leg ${state.currentLeg}/${state.legsPerSet}`;
+scoreboard.innerHTML=""; state.players.forEach((p,i)=>{scoreboard.innerHTML+=`<div class="player ${i===state.current?'active':''}"><h3>${p}</h3><h2>${state.scores[p]}</h2><small>Legi: ${state.legsWon[p]} | Sety: ${state.setsWon[p]}</small></div>`;});
+}
+
+let multiplier=1;
+function createKeypad(){keypad.innerHTML=""; for(let i=1;i<=20;i++){keypad.innerHTML+=`<div class="key" onclick="throwDart(${i})">${i}</div>`;} 
+keypad.innerHTML+=`<div class="key" onclick="throwDart(25)">Bull</div><div class="key" onclick="throwDart(50)">Bullseye</div>
+<div id="doubleBtn" class="key" onclick="setMult(2)">Double</div><div id="tripleBtn" class="key" onclick="setMult(3)">Triple</div>`;}
+
+function setMult(m){multiplier=m; doubleBtn.classList.remove("multActive"); tripleBtn.classList.remove("multActive"); if(m===2)doubleBtn.classList.add("multActive"); if(m===3)tripleBtn.classList.add("multActive");}
+
+function throwDart(val){
+let player=state.players[state.current]; if(state.dartsInTurn===0)state.turnStartScore=state.scores[player];
+let score=val*multiplier; if(multiplier===2)state.stats[player].doubleAttempts++; multiplier=1; doubleBtn.classList.remove("multActive"); tripleBtn.classList.remove("multActive");
+state.dartsInTurn++; let newScore=state.scores[player]-score;
+if(newScore<0||newScore===1||(state.doubleOut&&newScore===0&&score%2!==0)){bust();return;}
+state.scores[player]=newScore; state.stats[player].darts++; state.stats[player].totalPoints+=score;
+if(newScore===0){if(score%2===0)state.stats[player].doubleHits++; winLeg(player);return;}
+if(state.dartsInTurn===3)nextPlayer(); render();
+}
+
+function bust(){state.scores[state.players[state.current]]=state.turnStartScore; showBust(); nextPlayer();}
+function showBust(){let div=document.createElement("div"); div.className="bustOverlay"; div.innerHTML="BUST"; document.body.appendChild(div); setTimeout(()=>div.remove(),1000);}
+function nextPlayer(){state.dartsInTurn=0; state.current=(state.current+1)%state.players.length; render();}
+function winLeg(player){state.legsWon[player]++; if(state.legsWon[player]>=Math.ceil(state.legsPerSet/2)){state.setsWon[player]++; state.legsWon[player]=0; state.currentSet++; if(state.setsWon[player]>=Math.ceil(state.setsPerMatch/2)){endMatch();return;}} state.currentLeg++; state.players.forEach(p=>state.scores[p]=state.startScore); state.dartsInTurn=0; state.current=state.players.indexOf(player); render();}
+
+function endMatch(){game.classList.add("hidden"); endScreen.classList.remove("hidden"); displayStats();}
+
+function displayStats(){
+let html=""; state.players.forEach(p=>{let avg=(state.stats[p].totalPoints/state.stats[p].darts*3||0).toFixed(2); let doublePerc=(state.stats[p].doubleAttempts?(state.stats[p].doubleHits/state.stats[p].doubleAttempts*100):0).toFixed(1); html+=`<h3>${p}</h3>Średnia 3 lotek: ${avg}<br>Double trafione: ${doublePerc}%<br>Sety: ${state.setsWon[p]}<br>Legi: ${state.legsWon[p]}<br>`;}); finalStats.innerHTML=html;
+}
+
+function saveStats(){let saved=JSON.parse(localStorage.getItem("dartStats")||"[]"); let stat={date:new Date().toLocaleString(),players:[]}; state.players.forEach(p=>stat.players.push({name:p,avg:(state.stats[p].totalPoints/state.stats[p].darts*3||0).toFixed(2),doublePerc:(state.stats[p].doubleAttempts?(state.stats[p].doubleHits/state.stats[p].doubleAttempts*100):0).toFixed(1),sets:state.setsWon[p],legs:state.legsWon[p]})); saved.push(stat); localStorage.setItem("dartStats",JSON.stringify(saved)); alert("Statystyki zapisane!");}
+
+function backToMenu(){endScreen.classList.add("hidden"); setup.classList.remove("hidden"); players.innerHTML=""; state.players.forEach(p=>addPlayer(p));}
+function toggleTheme(){document.body.classList.toggle("light");}
+</script>
+</body>
+</html>
